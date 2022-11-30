@@ -106,10 +106,112 @@ export class Server {
 }
 ~~~
 
-- Ahora en el 8080 del navegador veo el html que tengo dentro de /public.
+- Ahora en el 8080 del navegador veo el html que tengo dentro de /public en la ruta raíz '/'
 - La ruta que tenía antes en el get('/') ya no es válida, la cambio por ('/hello')
 -----
 
 # Peticiones HTTP GET-PUT-POST-DELETE
+
+- Puedo devolver un json con .json
+
+~~~js
+
+        routes(){
+            this.app.get('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición get API'
+                })
+            })
+        }
+~~~
+
+- Puedo cambiarle el status con .status (el ok sería un 200)
+
+~~~js
+        routes(){
+            this.app.get('/api', (req,res)=>{
+                res.status(403).json({
+                    msg: 'Es una petición get API'
+                })
+            })
+        }
+~~~
+
+- Copio tres veces la petición get y lo cambio a put, post y delete
+
+~~~js
+  routes(){
+            this.app.get('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición get API'
+                })
+            })
+            this.app.put('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición put API'
+                })
+            })
+            this.app.post('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición post API'
+                })
+            })
+            this.app.delete('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición delete API'
+                })
+            })
+        }
+~~~
+
+    - Uso thunderclient o postman para realizar las peticiones
+   
+----
+# Usando códigos de respuesta HTTP en Express
+
+- 200 es todo OK
+    - 201 Created (con POST)
+- 300 es redireccionamiento
+- 400 ERROR Client (algo hizo mal en el frontend)
+    - 400 Bad Request
+    - 401 Unauthorized
+    - 402 Payment Required
+    - 403 Forbidden
+    - 404 Not Found
+    - 408 Request Time Out
+- 500 Server Error (algo salió mal en el server)
+    - 500 Internal Server Error
+    - 502 Bad Gateway
+----
+
+# CORS - Middleware
+
+- Instalo cors con npm. No tendría sentido si solo fuera en una red interna y las peticiones surgieran de un mismo lugar. 
+
+> npm i cors
+
+- Permite proteger el servidor de manera superficial
+- Tiene que estar habilitado para la mayoría de navegadores
+- Se puede configurar una whitelist y una blacklist
+
+
+- Lo importo en el server
+
+> import cors from 'cors'
+
+- Lo uso en el método de middlewares antes del resto
+
+~~~js
+middlewares(){
+            this.app.use(cors())
+            this.app.use(express.static('public'))
+        }
+~~~
+
+# Separar las rutas y el controlador de la clase
+
+
+
+
 
 

@@ -1,4 +1,5 @@
 import express from 'express'
+import cors from 'cors'
 
 
 export class Server {
@@ -12,13 +13,31 @@ export class Server {
     }
 
         middlewares(){
+            this.app.use(cors())
             this.app.use(express.static('public'))
         }
 
 
         routes(){
-            this.app.get('/hello', (req,res)=>{
-                res.send("Hello World!")
+            this.app.get('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición get API'
+                })
+            })
+            this.app.put('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición put API'
+                })
+            })
+            this.app.post('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición post API'
+                })
+            })
+            this.app.delete('/api', (req,res)=>{
+                res.json({
+                    msg: 'Es una petición delete API'
+                })
             })
         }
 
