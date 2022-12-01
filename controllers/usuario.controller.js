@@ -1,4 +1,4 @@
-
+import Usuario from "../models/usuario.js";
 
 export const usuariosGet= (req,res)=>{
 
@@ -23,14 +23,16 @@ export const usuariosPut = (req,res)=>{
     })
 }
 
-export const usuariosPost = (req,res)=>{
+export const usuariosPost = async(req,res)=>{
 
-    const {nombre, edad}= req.body
+    const body = req.body
+    const usuario = new Usuario(body)
+
+    await usuario.save()
 
     res.json({
         msg: 'Es una petición post API',
-        nombre,
-        edad
+        usuario
     })
 }
 
