@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import {router} from '../routes/user.routes.js'
 
 
 export class Server {
@@ -7,6 +8,7 @@ export class Server {
     constructor(){
         this.app = express()
         this.port= process.env.PORT
+        this.usuariosPath = '/api/usuarios'
         this.middlewares()
         this.routes()
 
@@ -14,31 +16,13 @@ export class Server {
 
         middlewares(){
             this.app.use(cors())
+            this.app.use(express.json())
             this.app.use(express.static('public'))
         }
 
 
         routes(){
-            this.app.get('/api', (req,res)=>{
-                res.json({
-                    msg: 'Es una petición get API'
-                })
-            })
-            this.app.put('/api', (req,res)=>{
-                res.json({
-                    msg: 'Es una petición put API'
-                })
-            })
-            this.app.post('/api', (req,res)=>{
-                res.json({
-                    msg: 'Es una petición post API'
-                })
-            })
-            this.app.delete('/api', (req,res)=>{
-                res.json({
-                    msg: 'Es una petición delete API'
-                })
-            })
+          this.app.use(this.usuariosPath, router)
         }
 
         listen(){
