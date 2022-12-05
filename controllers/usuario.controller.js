@@ -1,4 +1,6 @@
 import Usuario from "../models/usuario.js";
+import bcryptjs from 'bcryptjs';
+
 
 export const usuariosGet= (req,res)=>{
 
@@ -25,8 +27,15 @@ export const usuariosPut = (req,res)=>{
 
 export const usuariosPost = async(req,res)=>{
 
-    const body = req.body
-    const usuario = new Usuario(body)
+  
+
+    const {nombre, correo, password, rol} = req.body
+    const usuario = new Usuario({nombre, correo, password, rol})
+
+   
+
+    const salt = bcryptjs.genSaltSync(10);
+    usuario.password = bcryptjs.hashSync(password, salt)
 
     await usuario.save()
 

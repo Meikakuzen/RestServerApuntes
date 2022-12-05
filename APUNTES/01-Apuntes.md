@@ -1,5 +1,10 @@
 # RestServer
 
+- Cambio en el package.json para usar el import y export
+- Colocar antes de los scripts
+
+>  "type": "module",
+
 - Install express y dotenv
 - Creo el archivo .env con la variable de PORT=8080
 - Importo dotenv en app.js y lo uso con dotenv.config() 

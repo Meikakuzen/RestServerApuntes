@@ -17,10 +17,10 @@ const UsuarioSchema = mongoose.Schema({
     img:{
         type: String
     },
-    role:{
+    rol:{
         type: String,
         required: true,
-        enum: ['ADMIN_ROLE', 'USER_ROLE']
+        enum: ['ADMIN_ROLE', 'USER_ROLE', 'VENTAS_ROLE']
     },
     estado:{
         type: Boolean,
@@ -32,6 +32,11 @@ const UsuarioSchema = mongoose.Schema({
     }
 
 })
+
+UsuarioSchema.methods.toJSON = function(){
+    const {__v, password, ...usuario} = this.toObject()
+    return usuario
+}
 
 const Usuario = mongoose.model("Usuario", UsuarioSchema)
 

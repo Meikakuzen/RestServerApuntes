@@ -136,7 +136,7 @@ export default Usuario
 {
   "nombre": "Jean",
   "correo": "jean@mail.com",
-  "password": 123456,
+  "password": "123456",
   "rol": "ADMIN"
 }
 ~~~
@@ -183,5 +183,297 @@ export const usuariosPost = async(req,res)=>{
 - Si choca con el correo también crasheará
 - Hay que manejar los errores
 - El password no está encriptado y los roles todavía no los filtra
+---
 
 # BcryptJS- Encriptando la contraseña
+
+- Hay que encriptar los passwords
+- También hay que validar todos los endpoints de la manera más minuciosa posible, no hay que confiar en el frontend
+- Primero voy a desestructurar el body y tomar sólo lo que me interesa
+- Lo meto dentro de un objeto en la instancia de Usuario
+
+~~~js
+
+export const usuariosPost = async(req,res)=>{
+
+    const {nombre, correo, password, role} = req.body
+    const usuario = new Usuario({nombre, correo, password, role})
+
+    await usuario.save()
+
+    res.json({
+        msg: 'Es una petición post API',
+        usuario
+    })
+}
+~~~
+- Instalo via npm bcryptjs
+
+> npm i bcryptjs
+
+- Lo importo en el controller
+
+> import bcryptjs from 'bcryptjs';
+
+- Hay que verificar si el correo existe
+- Encriptar el password
+- Para encriptar primero se genera un salt ( el número de vueltas para complicar la encriptación, viene 10 por defecto)
+- Accedo al password del objeto usuario con notación de punto y en la encriptación añado el password y el salt
+
+~~~js
+export const usuariosPost = async(req,res)=>{
+
+    const {nombre, correo, password, role} = req.body
+    const usuario = new Usuario({nombre, correo, password, role})
+
+
+    const salt = bcryptjs.genSaltSync(10);
+    usuario.password = bcryptjs.hashSync(password, salt)
+
+    await usuario.save()
+
+    res.json({
+        usuario
+    })
+}
+~~~
+
+- Importante: el password debe de ser un string, cómo se indicó en el modelo.
+
+----
+
+# Validar campos obligatorios - Email
+
+- Para evitar escribir lo mismo en varios lugares, se instalará el express-validator
+- Para verificar si el correo existe
+
+~~~js
+export const usuariosPost = async(req,res)=>{
+
+    const {nombre, correo, password, role} = req.body
+    const usuario = new Usuario({nombre, correo, password, role})
+
+     const existeEmail= await Usuario.findOne({correo})
+    if(existeEmail){
+        return res.status(400).json({
+            msg: "El correo ya está registrado"
+        })
+    }
+
+
+    const salt = bcryptjs.genSaltSync(10);
+    usuario.password = bcryptjs.hashSync(password, salt)
+
+    await usuario.save()
+
+    res.json({
+        msg: 'Es una petición post API',
+        usuario
+    })
+}
+~~~
+- express-validator tiene un gran conjunto de middlewares para hacer validaciones
+- Si se mandan dos argumentos en usuario.routes son la ruta y el controlador
+    - Si hay un tercer argumento es el middleware de validación de express-validator
+    - Si se mandan varios se hace mediante un arreglo
+    - Uso el check para indicar qué campo quiero comprobar
+    - Uso el método isEmail para hacer la validación
+
+- usuario.routes:
+
+~~~js
+import {Router} from 'express'
+import { check } from 'express-validator'
+import { usuariosDelete, usuariosGet, usuariosPost, usuariosPut } from '../controllers/usuario.controller.js'
+
+export const router = Router()
+
+router.get('/', usuariosGet)
+
+router.put('/:id', usuariosPut)
+
+router.post('/',[
+    check('correo', "El correo no es válido").isEmail()
+] ,usuariosPost)
+
+router.delete('/', usuariosDelete)
+~~~
+
+- Esto me da la posibilidad de usar el error en el controlador con la función validationResult.
+    - Me pide la req
+- Si errors no está vacío, retorno un status 400 e imprimo en un json los errors
+----
+
+# Validar todos los campos necesarios
+
+- Los campos obligatorios se tienen que validar cómo obligatorios ( nombre, correo, password, rol)
+
+~~~js
+router.post('/',[
+    check('nombre', 'El nombre es obligatorio').not().isEmpty(),
+    check('password', 'El password es obligatorio y debe de ser de más de 6 letras').isLength({ min: 6}),
+    check('correo', "El correo no es válido").isEmail(),
+    check('rol', 'No es un rol válido').isIn(['ADMIN_ROL', 'USER_ROL']),
+] ,usuariosPost)
+~~~
+
+- Para no tener que escribir reiteradamente  la comprobacion de errors= validationResult(req) voy a crear un middleware personalizado
+- Creo la carpeta middlewares con el archivo validar-campos.js
+- Copio y pego el código en una función
+- Importo el validationResult
+- Los middlewares también se llaman con el req,res
+- Al ser un middleware va a tener un tercer argumento llamado next, para pasar a lo siguiente
+
+~~~js
+import { validationResult } from "express-validator";
+
+export const validarCampos = (req,res, next)=>{
+    
+    const errors = validationResult(req)
+
+    if(!errors.isEmpty()){
+        return res.status(400).json(errors)
+    }
+
+    next()
+}
+~~~
+- Los middlewares tienen acceso al req,res,next por lo que no tengo que importarlos
+- Lo coloco al final para revisar los errores de cada uno de estos checks
+
+~~~js
+router.post('/',[
+    check('nombre', 'El nombre es obligatorio').not().isEmpty(),
+    check('password', 'El password es obligatorio y debe de ser de más de 6 letras').isLength({ min: 6}),
+    check('correo', "El correo no es válido").isEmail(),
+    check('rol', 'No es un rol válido').isIn(['ADMIN_ROL', 'USER_ROL']),
+    validarCampos
+] ,usuariosPost)
+~~~
+
+----
+# Validar rol contra base de datos
+
+- Con esta validación, significa que solo 2 roles serán válidos. Si quiero añadir uno tendría que modificar esta línea
+- Quiero validarlo contra una base de datos. Comento esta linea
+
+> //    check('rol', 'No es un rol válido').isIn(['ADMIN_ROL', 'USER_ROL']),
+
+- Creo una nueva colección en MongoCompass llamada role
+- Voy a ADD DATA, inserto un documento en formato JSON 
+
+~~~js
+{
+    "rol": "ADMIN_ROLE"
+}
+~~~
+
+- Inserto otros dos con USER_ROLE y VENTAS_ROLE
+- Para leerlos de la DB hay que crear un modelo
+
+~~~js
+import mongoose from 'mongoose';
+
+const RoleSchema = mongoose.Schema({
+
+    rol:{
+        type: String,
+        required: [true, 'El rol es obligatorio']
+    }
+
+})
+
+export const Role = mongoose.model('Role', RoleSchema)
+~~~
+
+- Ahora toca hacer la validación en el el usuario.routes
+- Utilizo .custom
+- Le añado un valor por defecto al rol por si no viniera
+- Hago la verificación de que existe el rol
+
+~~~js
+
+router.post('/',[
+    check('nombre', 'El nombre es obligatorio').not().isEmpty(),
+    check('password', 'El password es obligatorio y debe de ser de más de 6 letras').isLength({ min: 6}),
+    check('correo', "El correo no es válido").isEmail(),
+    //check('rol', 'No es un rol válido').isIn(['ADMIN_ROL', 'USER_ROL']),
+    check('rol').custom( async (rol = '') =>{
+        const existeRol = await Role.findOne({rol})
+
+        if(!existeRol){
+            throw new Error('El rol no es válido')
+        }
+    }),
+    validarCampos
+] ,usuariosPost)
+~~~
+
+# Centralizar la validación del rol
+
+- Creo la carpeta helpers con el archivo db-validators.js
+
+~~~js
+import mongoose from 'mongoose';
+
+const RoleSchema = mongoose.Schema({
+
+    rol:{
+        type: String,
+        required: [true, 'El rol es obligatorio']
+    }
+
+})
+
+const Role = mongoose.model('Role', RoleSchema)
+
+export default Role
+~~~
+
+- Cuando en un callback el primer argumento es el mismo argumento que se recibe cómo parámetro de la función se puede dejar solo la referencia
+
+~~~js
+check('rol').custom(rol=>esRoleValido(rol)),
+~~~
+
+- Dejando solo la referencia
+
+~~~js
+check('rol').custom(esRoleValido)
+~~~
+
+- Puedo modificar un método en el modelo.
+- Por ejemplo, no quiero que me devuelva el password.
+- Necesito hacerlo con una función normal porque voy a usar el this
+- Uso la desestructuración para sacar los campos que no quiero
+- Utilizo el parámetro rest para sacar y almacenar el resto de argumentos
+
+~~~js
+UsuarioSchema.methods.toJSON = function(){
+    const {__v, password, ...usuario} = this.toObject() //para referirme al modelo
+    return usuario
+}
+~~~
+- Ahora al crear un usuario no retorna ni el password ni la versión
+
+-----
+# Custom Validation- Email existe
+
+~~~js
+export const emailExiste = async(correo="")=>{
+    const existeEmail= await Usuario.findOne({correo})
+    if(existeEmail){
+        throw new Error (`El correo ${correo} ya está registrado`)
+    }
+}
+~~~
+
+- Añado otro check
+
+~~~js
+check('correo').custom(emailExiste),
+~~~
+
+----
+
+# PUT: Actualizar información del usuario
