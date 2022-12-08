@@ -477,3 +477,329 @@ check('correo').custom(emailExiste),
 ----
 
 # PUT: Actualizar información del usuario
+
+- Para actualizar, en la url debe ir un id que validar contra la db
+- Hay muchas maneras de hacer esto. Voy a hacer que si quiere actualizar el password también lo actualice
+- Voy a usuariosPut en el controlador
+- Desestructuro las propiedades que me intersa cambiar del req.body
+- Uso el parámetro rest para desestructurar el resto de propiedades 
+
+~~~js
+const {password, correo, ...resto} = req.body
+~~~
+
+- Debo validar que el id exista en la db (después)
+- Si viene el password significa que quiere actualizar el password.
+- Hay que validar que es la misma persona la que quiere cambiar el password (después)
+- Copio y pego las lineas de encriptación con bcrypt de la ruta POST
+- Actualizo usuario con .findByIdAndUpdate y le añado la info que quiero actualizar (el resto) 
+- Añando el objeto {new: true} para que me devuelva el objeto actualizado
+
+        NOTA: Al excluir el correo con la desestructuración evitamos el error de llave duplicada al actualizar
+
+~~~js
+export const usuariosPut = async (req,res)=>{
+
+    const id= req.params.id
+    const {password, google, correo, ...resto} = req.body
+
+    if(password){
+        const salt = bcryptjs.genSaltSync(10);
+        resto.password = bcryptjs.hashSync(password, salt)
+    }
+
+    const usuario = await Usuario.findByIdAndUpdate(id, resto, {new: true})
+
+    res.json({
+        msg: 'Es una petición put API',
+        usuario
+    })
+}
+~~~
+
+- Si hago una petición PUT con un id de mongo válida existente en la db la actualiza menos google y el correo porque los estoy excluyendo.
+- Si que me permite cambiar el ROLE, porque hace falta un middleware en el router.put para validarlo
+- Debo validar que el id de mongo que exista
+
+----
+
+# Validaciones adicionales en el PUT
+
+- Si le mando en el body un _id me va a disparar un error
+- Para ello extraigo también en la desestructuración el _id
+
+>  const {_id, password, google, correo, ...resto} = req.body
+
+- También hay que asegurarse de que el id en la url sea un id válido de mongo
+- En usuario.routes, en el put agrego un arreglo dónde irán mis middlewares
+- Uso el check. Hay una validación en express-validator para verificar que es un mongoId
+- tengo que poner validarCampos al final de todos mis checks, para que no continúe a la ruta si hay algún error
+
+~~~js
+router.put('/:id', [
+    check('id', "No es un id válido").isMongoId(),
+    validarCampos
+] ,usuariosPut)
+~~~
+
+- Ahora voy a hacer una validación personalizada de si existe un usuario con ese id en db-validators.js
+
+~~~js
+export const existeUsuarioPorId = async(id)=>{
+    const existeUsuario = await Usuario.findById(id)
+    
+    if(!existeUsuario){
+        throw new Error(`El usuario no existe`)
+    }
+}
+~~~
+
+- Lo añado como un custom en el router.put
+
+~~~js
+router.put('/:id', [
+    check('id', "No es un id válido").isMongoId(),
+    check('id').custom(existeUsuarioPorId),
+    validarCampos
+] ,usuariosPut)
+~~~
+
+- Hay que validar el rol, ya se hizo anteriormente. Agrego la validación (opcional)
+- Esto significa que tiene que venir el rol en la actualización
+
+----
+
+# GET: Obtener todos los usuarios de forma paginada
+
+- Creo 15 usuarios más para hacer la paginación
+- Para obtener los usuarios
+
+~~~js
+export const usuariosGet= async(req,res)=>{
+
+    const usuarios = await Usuario.find()
+
+    res.json({
+      usuarios
+    })
+}
+~~~
+
+- Si en la url pongo el parámetro limit=5 significa que solo quiero los 5 primeros registros
+- En el find hay una instrucción que es para indicar el límite
+- Desestructuro de los argumentos de la url con req.query
+- Pongo por defecto el límite en 5
+
+~~~js
+
+export const usuariosGet= async(req,res)=>{
+
+    const {limite = 5} = req.query
+
+    const usuarios = await Usuario.find()
+        .limit(limite)
+
+    res.json({
+      usuarios
+    })
+}
+~~~
+
+- Esto da error porque cuando extraemos de un query un parámetro lo extrae como string y limit está esperando un número
+- Por ello lo casteo con Number
+
+~~~js
+export const usuariosGet= async(req,res)=>{
+
+    const {limite = 5} = req.query
+
+    const usuarios = await Usuario.find()
+        .limit(Number(limite))
+
+    res.json({
+      usuarios
+    })
+}
+~~~
+
+- Ahora si yo pongo el query limite en 6 me devuelve solo 6 resultados
+
+> http://localhost:8080/api/usuarios?limite=6
+
+- Voy a recibir otro argumento "desde" que por defecto estará en 0, que servirá para elegir desde que registro quiero empezar
+
+~~~js
+export const usuariosGet= async(req,res)=>{
+
+    const {limite = 5, desde = 0} = req.query
+
+    const usuarios = await Usuario.find()
+        .skip(Number(desde))
+        .limit(Number(limite))
+
+    res.json({
+      usuarios
+    })
+}
+~~~
+------
+
+# Retornar número total de registros en una colección
+
+- Uso countDocuments() en el usuariosGet
+
+~~~js
+const total = await Usuario.countDocuments()
+~~~
+
+- Lo envío en el res.json
+
+~~~js
+  res.json({
+      total,
+      usuarios
+    })
+~~~
+
+- En este curso, la estrategia con el delete es de no borrar fisicamente el usuario si no cambiar su estado a false
+- Para filtrar esto yo puedo mandar en el find un filtro con esta condición
+- Pongo la misma condición en el countDocuments
+
+~~~js
+export const usuariosGet= async(req,res)=>{
+
+    const {limite = 5, desde = 0} = req.query
+
+    const usuarios = await Usuario.find({estado:true})
+        .skip(Number(desde))
+        .limit(Number(limite))
+
+    const total = await Usuario.countDocuments({estado:true})
+
+    res.json({
+        total,
+      usuarios
+    })
+}
+~~~
+
+- El await es bloqueante. Si la primera petición (usuarios) demora 1 segundo y después total demora 1 segundo, tardará 2 segundos en dar la respuesta
+- Pero necesito el await para tener el resultado cuando lo envío en la respuesta (res.json)
+- Entonces, para arreglarlo, voy a hacer las dos peticiones de manera simultánea
+- Para ello uso el Promise.all. Hay que poner el await para que se espere a la resolución, pero ejecutará ambas de manera simultánea
+- La respuesta es una colección de las dos promesas
+- Si una da error, todas darán error
+
+~~~js
+export const usuariosGet= async(req,res)=>{
+
+    const {limite = 5, desde = 0} = req.query
+    
+    const resp = await Promise.all([
+        Usuario.countDocuments({estado:true}),
+        Usuario.find({estado:true})
+            .skip(Number(desde))
+            .limit(Number(limite))
+    ])
+
+    res.json({
+        resp
+    })
+}
+~~~
+
+- Como es un arreglo de promesas puedo usar desestructuración de arreglos para que luzca mejor el res.json
+
+~~~js
+export const usuariosGet= async(req,res)=>{
+
+    const {limite = 5, desde = 0} = req.query
+    
+    const [total, usuarios] = await Promise.all([
+        
+        Usuario.countDocuments({estado:true}),
+        Usuario.find({estado:true})
+            .skip(Number(desde))
+            .limit(Number(limite))
+    ])
+
+    res.json({
+        total,
+        usuarios
+    })
+}
+~~~
+
+- Para que luzca más limpio el código guardo el objeto en una variable llamada query
+
+~~~js
+export const usuariosGet= async(req,res)=>{
+
+    const {limite = 5, desde = 0} = req.query
+
+    const query= {estado:true}
+    
+    const [total, usuarios] = await Promise.all([
+        Usuario.countDocuments(query),
+        Usuario.find(query)
+            .skip(Number(desde))
+            .limit(Number(limite))
+    ])
+
+    res.json({
+        total,
+        usuarios
+    })
+}
+~~~
+
+-----
+
+# Delete: borrando un usuario
+
+- El DELETE también recibe el id como segmento
+
+> router.delete('/:id', usuariosDelete)
+
+- Lo extraigo con desestructuración del req.params
+- Debo validar que el id exista, que sea válido de mongo
+- Copio los checks hechos anteriormente y los pego
+
+~~~js
+router.delete('/:id', [
+    check('id', "No es un id válido").isMongoId(),
+    check('id').custom(existeUsuarioPorId),
+    validarCampos
+], usuariosDelete)
+~~~
+
+- Para borrarlo fisicamente:
+
+~~~js
+export const usuariosDelete = async (req,res)=>{
+    
+    const {id} = req.params
+    
+   const usuario= await Usuario.findByIdAndDelete(id)
+    
+    res.json({
+        usuario
+    })
+}
+~~~
+
+- Lo que voy a hacer en lugar de borrarlo físicamente es cambiar el estado a false.
+
+~~~js
+export const usuariosDelete = async (req,res)=>{
+    
+    const {id} = req.params
+    
+   const usuario = await Usuario.findByIdAndUpdate(id, {estado: false})
+    
+    res.json({
+        usuario
+    })
+}
+~~~
+

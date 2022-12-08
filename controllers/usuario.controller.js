@@ -2,37 +2,47 @@ import Usuario from "../models/usuario.js";
 import bcryptjs from 'bcryptjs';
 
 
-export const usuariosGet= (req,res)=>{
+export const usuariosGet= async(req,res)=>{
 
-    const {q,nombre ="Pere", id = 0}= req.query
+    const {limite = 5, desde = 0} = req.query
+
+    const query= {estado:true}
+    
+    const [total, usuarios] = await Promise.all([
+        Usuario.countDocuments(query),
+        Usuario.find(query)
+            .skip(Number(desde))
+            .limit(Number(limite))
+    ])
 
     res.json({
-        msg: 'Es una petición get API',
-        q,
-        nombre,
-        id
-    
+        total,
+        usuarios
     })
 }
 
-export const usuariosPut = (req,res)=>{
+export const usuariosPut = async (req,res)=>{
 
     const id= req.params.id
+    const {_id, password, google, correo, ...resto} = req.body
+
+    if(password){
+        const salt = bcryptjs.genSaltSync(10);
+        resto.password = bcryptjs.hashSync(password, salt)
+    }
+
+    const usuario = await Usuario.findByIdAndUpdate(id, resto, {new:true})
 
     res.json({
         msg: 'Es una petición put API',
-        id
+        usuario
     })
 }
 
 export const usuariosPost = async(req,res)=>{
 
-  
-
     const {nombre, correo, password, rol} = req.body
     const usuario = new Usuario({nombre, correo, password, rol})
-
-   
 
     const salt = bcryptjs.genSaltSync(10);
     usuario.password = bcryptjs.hashSync(password, salt)
@@ -45,8 +55,13 @@ export const usuariosPost = async(req,res)=>{
     })
 }
 
-export const usuariosDelete = (req,res)=>{
+export const usuariosDelete = async (req,res)=>{
+    
+    const {id} = req.params
+    
+   const usuario = await Usuario.findByIdAndUpdate(id, {estado: false})
+    
     res.json({
-        msg: 'Es una petición delete API'
+        usuario
     })
 }
